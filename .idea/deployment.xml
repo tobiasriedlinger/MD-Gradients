@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="PublishConfigData" autoUpload="Always" serverName="riedlinger@mdcomp02.math.uni-wuppertal.de:22" uploadOnCheckin="c1173022-2ea5-4658-8d50-6192dbf4cc06">
+    <serverData>
+      <paths name="riedlinger@mdcomp02.math.uni-wuppertal.de:22">
+        <serverdata>
+          <mappings>
+            <mapping deploy="/home/riedlinger/MetaDetect-Merged" local="$PROJECT_DIR$" web="/" />
+          </mappings>
+        </serverdata>
+      </paths>
+      <paths name="riedlinger@mdcomp03.math.uni-wuppertal.de:22">
+        <serverdata>
+          <mappings>
+            <mapping deploy="/tmp/pycharm_project_874" local="$PROJECT_DIR$" />
+          </mappings>
+        </serverdata>
+      </paths>
+    </serverData>
+    <option name="myUploadOnCheckinName" value="riedlinger@mdcomp02.math.uni-wuppertal.de:22" />
+    <option name="myAutoUpload" value="ALWAYS" />
+  </component>
+</project>
