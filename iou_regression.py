@@ -8,3 +8,113 @@
 #  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #
 
+import tqdm
+import numpy as np
+import pandas as pd
+from sklearn.linear_model import LinearRegression, LogisticRegression, Lasso
+from xgboost import XGBRegressor, plot_importance
+from sklearn.metrics import r2_score, roc_auc_score
+from keras.models import Sequential
+from keras.layers import Dense
+from keras import regularizers
+import keras
+import keras.backend as ker_back
+from RegscorePy import *
+import matplotlib.pyplot as plt
+
+valid_methods = ["linear", "shallow nn", "gradient boost"]
+
+
+def regression(variables, targets, num_ensemble=10, method="linear", nn_epochs=30,
+               gb_depth=3, gb_n_estimators=100, gb_alpha=0.4, gb_lambda=0.4):
+    assert method in valid_methods
+    r_squared_val = []
+    r_squared_train = []
+
+    num_variables = variables.shape[-1]
+
+    print("Aggregating {} regression over {} ensemble members...".format(method, num_ensemble))
+    for i in tqdm.tqdm(range(num_ensemble)):
+        np.random.seed(i)
+        val_mask = np.random.rand(len(targets)) < 0.2
+        variables_val, variables_train = variables[val_mask, :], variables[np.logical_not(val_mask), :]
+        targets_val, targets_train = targets[val_mask], targets[np.logical_not(val_mask)]
+
+        if method == "linear":
+            model = LinearRegression().fit(variables_train, targets_train)
+        elif method == "shallow nn":
+            model = shallow_net_model(num_variables)
+            model.compile(loss='mean_squared_error', optimizer='adam', metrics=[shallow_net_stddev])
+            model.fit(variables_train, targets_train, epochs=nn_epochs, batch_size=128, verbose=0)
+        elif method == "gradient boost":
+            model = XGBRegressor(verbosity=0, max_depth=gb_depth, colsample_bytree=0.5, n_estimators=gb_n_estimators, reg_alpha=gb_alpha, reg_lambda=gb_lambda).fit(variables_train, targets_train)
+
+        r_squared_val.append(r2_score(targets_val, np.clip(model.predict(variables_val), 0, 1)))
+        r_squared_train.append(r2_score(targets_train, np.clip(model.predict(variables_train), 0, 1)))
+
+    r_squared_val, r_squared_train = np.array(r_squared_val), np.array(r_squared_train)
+    frame = pd.DataFrame({"mean R^2 val" : [np.mean(r_squared_val)],
+                          "std R^2 val" : [np.std(r_squared_val)],
+                          "mean R^2 train" : [np.mean(r_squared_train)],
+                          "std R^2 train" : [np.std(r_squared_train)]})
+
+    return frame
+
+
+def shallow_net_model(input_dim):
+    reg = regularizers.l2(0.01)
+    model = Sequential()
+    model.add(Dense(units=61, activation='relu', kernel_regularizer=reg, input_dim=input_dim))
+    model.add(Dense(units=61, activation='relu', kernel_regularizer=reg))
+    model.add(Dense(units=1, kernel_regularizer=reg, activation='linear'))
+
+    return model
+
+
+def shallow_net_stddev(y_true, y_pred):
+    return ker_back.sqrt(keras.losses.mean_squared_error(y_true, y_pred))
+
+
+def lasso_plot(variables, targets, variables_names, ords_of_mag=[1.0e-3, 1.0e-2, 1.0e-1], scales=[1, 2, 4, 7, 9]):
+    ticks = []
+    weights_df = pd.DataFrame(columns=variables_names)
+    information_criterion_frame = pd.DataFrame(columns=['AIC', 'BIC'])
+
+    for ord in ords_of_mag:
+        for s in tqdm.tqdm(scales):
+            lam_inverse = ord * s
+            ticks.append(lam_inverse)
+            lasso_model = Lasso(alpha=lam_inverse, max_iter=3000, tol=1e-4).fit(variables, targets)
+            weights_df.loc[lam_inverse, :] = lasso_model.coef_
+            num_active_weights = int(np.count_nonzero(np.array(lasso_model.coef_)))
+            if num_active_weights ==0:
+                information_criterion_frame.loc[lam_inverse, 'AIC'] = 0
+                information_criterion_frame.loc[lam_inverse, 'BIC'] = 0
+            else:
+                information_criterion_frame.loc[lam_inverse, 'AIC'] = aic.aic(targets.astype(np.float), lasso_model.predict(variables).astype(np.float), num_active_weights)
+                information_criterion_frame.loc[lam_inverse, 'BIC'] = bic.bic(targets.astype(np.float), lasso_model.predict(variables).astype(np.float), num_active_weights)
+
+    plt.clf()
+    aic_lam_inv = information_criterion_frame.index[np.argmin(information_criterion_frame['AIC'].to_numpy())]
+    aic_choice = plt.plot(aic_lam_inv * np.ones([2]), np.array([weights_df.min(), weights_df.max()]), color='k')
+    bic_lam_inv = information_criterion_frame.index[np.argmin(information_criterion_frame['BIC'].to_numpy())]
+    bic_choice = plt.plot(bic_lam_inv * np.ones([2]), np.array([weights_df.min(), weights_df.max()]), color='k')
+
+    graphs_list = []
+    for col in weights_df.columns:
+        ls = 'solid'
+        if 'nab_loc' in col: ls = 'dashed'
+        if 'nab_score' in col: ls = 'dashdot'
+        if 'nab_prob' in col: ls = 'dotted'
+        graphs_list.append(plt.plot(weights_df.index, weights_df[col], label=col, linestyle=ls))
+    plt.xscale("log")
+    plt.xlabel("$\lambda$")
+    plt.ylabel("Regression coefficients")
+    plt.title("LASSO Plot: Regression")
+    plt.legend(loc="lower center")
+    # plt.legend(bbox_to_anchor=(1, 0), ncol=3)
+    plt.xticks(ticks=ticks, labels=ticks, rotation='vertical')
+    plt.show()
+
+    return weights_df, information_criterion_frame
+
