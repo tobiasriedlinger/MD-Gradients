@@ -10,7 +10,7 @@
 
 import matplotlib.pyplot as plt
 import numpy as np
-import pandas as pd
+
 
 def lasso_spaghetti(weights_df, information_criterion_frame, ticks):
     plt.clf()
@@ -62,6 +62,11 @@ def large_lasso_clean(weights_df, information_criterion_frame, ticks, color_thre
         if np.max(np.abs(weights_df[col].to_numpy())) > color_thresh:
             num += 1
             plt.plot(weights_df.index, weights_df[col], color=palette(num), linewidth=1.5, alpha=0.9, label=col)
+
+    plt.plot(aic_marker*np.ones([2]), np.array([weights_df.min(), weights_df.max()]), color='k', linestyle='dashed')
+    plt.text(aic_marker, np.max(weights_df.max()), "$AIC$")
+    plt.plot(bic_marker*np.ones([2]), np.array([weights_df.min(), weights_df.max()]), color='k', linestyle='dashed')
+    plt.text(bic_marker, np.max(weights_df.max()), "$BIC$")
 
     plt.xscale('log')
     plt.xlabel("Regularization Strength $\\lambda$")

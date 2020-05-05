@@ -7,23 +7,23 @@
 #  3. Neither the name of the copyright holder nor the names of its contributors may be used to endorse or promote products derived from this software without specific prior written permission.
 #  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #
+import matplotlib.pyplot as plt
+import matplotlib as mpl
+import numpy as np
 
-METRICS_PATH       = "/home/riedlinger/tensorflow-yolov3-MetaDetect/metric-inferences"
+def scatter(x, y, xlabel="x", ylabel="y", size=5):
+    plt.clf()
+    plt.scatter(x, y, s=size, alpha=0.2)
+    plt.xlabel(xlabel)
+    plt.ylabel(ylabel)
+    plt.xlim(0, 1)
+    plt.ylim(0, 1)
+    rho = np.corrcoef(x, y)[0,1]
+    plt.grid()
+    plt.text(0.61, 0.1, "$\\rho = {:.4f}$".format(rho), fontsize=12)
 
-DATASET_NAME       = "coco"
+    print(rho)
 
-BASE_FRAME_FILE    = "boxes_data.csv"
-BASE_FRAME_PATH    = "{}/{}/{}".format(METRICS_PATH, "COCO", BASE_FRAME_FILE)
+    plt.show()
 
-INCLUDE_GRADIENT_METRICS = True
-
-GRADIENT_FRAME_FILE= "50images_last_layers.csv"
-GRADIENT_FRAME_PATH= "{}/{}/gradient_based/{}".format(METRICS_PATH, "COCO", GRADIENT_FRAME_FILE)
-
-RUN_REGRESSION     = False
-RUN_REG_LASSO      = False
-RUN_CLASSIFICATION = True
-RUN_CLASS_LASSO    = False
-
-### PLOTTING:
-USE_LATEX          = False
+    return rho

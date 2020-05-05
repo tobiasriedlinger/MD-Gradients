@@ -13,7 +13,7 @@ import numpy as np
 import pandas as pd
 from sklearn.linear_model import LinearRegression, LogisticRegression, Lasso
 from xgboost import XGBRegressor, plot_importance
-from sklearn.metrics import r2_score, roc_auc_score
+from sklearn.metrics import r2_score
 from keras.models import Sequential
 from keras.layers import Dense
 from keras import regularizers
@@ -21,24 +21,27 @@ import keras
 import keras.backend as ker_back
 from RegscorePy import *
 import matplotlib.pyplot as plt
+import plotting.lasso_plots as spagh
 
 valid_methods = ["linear", "shallow nn", "gradient boost"]
 
 
-def regression(variables, targets, num_ensemble=10, method="linear", nn_epochs=30,
+def r2_regression(variables, targets, num_ensemble=10, method="linear", nn_epochs=30,
                gb_depth=3, gb_n_estimators=100, gb_alpha=0.4, gb_lambda=0.4):
     assert method in valid_methods
     r_squared_val = []
     r_squared_train = []
 
     num_variables = variables.shape[-1]
+    iou_predictions = []
 
     print("Aggregating {} regression over {} ensemble members...".format(method, num_ensemble))
     for i in tqdm.tqdm(range(num_ensemble)):
         np.random.seed(i)
         val_mask = np.random.rand(len(targets)) < 0.2
-        variables_val, variables_train = variables[val_mask, :], variables[np.logical_not(val_mask), :]
-        targets_val, targets_train = targets[val_mask], targets[np.logical_not(val_mask)]
+        train_mask = np.logical_not(val_mask)
+        variables_val, variables_train = variables[val_mask, :], variables[train_mask, :]
+        targets_val, targets_train = targets[val_mask], targets[train_mask]
 
         if method == "linear":
             model = LinearRegression().fit(variables_train, targets_train)
@@ -49,16 +52,21 @@ def regression(variables, targets, num_ensemble=10, method="linear", nn_epochs=3
         elif method == "gradient boost":
             model = XGBRegressor(verbosity=0, max_depth=gb_depth, colsample_bytree=0.5, n_estimators=gb_n_estimators, reg_alpha=gb_alpha, reg_lambda=gb_lambda).fit(variables_train, targets_train)
 
-        r_squared_val.append(r2_score(targets_val, np.clip(model.predict(variables_val), 0, 1)))
-        r_squared_train.append(r2_score(targets_train, np.clip(model.predict(variables_train), 0, 1)))
+        prediction = np.clip(model.predict(variables), 0, 1)
+        if i == 0:
+            iou_predictions.append(targets[val_mask])
+            iou_predictions.append(prediction[val_mask])
+        r_squared_val.append(r2_score(targets_val, prediction[val_mask]))
+        r_squared_train.append(r2_score(targets_train, prediction[train_mask]))
 
+    iou_predictions = np.array(iou_predictions)
     r_squared_val, r_squared_train = np.array(r_squared_val), np.array(r_squared_train)
     frame = pd.DataFrame({"mean R^2 val" : [np.mean(r_squared_val)],
                           "std R^2 val" : [np.std(r_squared_val)],
                           "mean R^2 train" : [np.mean(r_squared_train)],
                           "std R^2 train" : [np.std(r_squared_train)]})
 
-    return frame
+    return iou_predictions, frame
 
 
 def shallow_net_model(input_dim):
@@ -94,27 +102,7 @@ def lasso_plot(variables, targets, variables_names, ords_of_mag=[1.0e-3, 1.0e-2,
                 information_criterion_frame.loc[lam_inverse, 'AIC'] = aic.aic(targets.astype(np.float), lasso_model.predict(variables).astype(np.float), num_active_weights)
                 information_criterion_frame.loc[lam_inverse, 'BIC'] = bic.bic(targets.astype(np.float), lasso_model.predict(variables).astype(np.float), num_active_weights)
 
-    plt.clf()
-    aic_lam_inv = information_criterion_frame.index[np.argmin(information_criterion_frame['AIC'].to_numpy())]
-    aic_choice = plt.plot(aic_lam_inv * np.ones([2]), np.array([weights_df.min(), weights_df.max()]), color='k')
-    bic_lam_inv = information_criterion_frame.index[np.argmin(information_criterion_frame['BIC'].to_numpy())]
-    bic_choice = plt.plot(bic_lam_inv * np.ones([2]), np.array([weights_df.min(), weights_df.max()]), color='k')
-
-    graphs_list = []
-    for col in weights_df.columns:
-        ls = 'solid'
-        if 'nab_loc' in col: ls = 'dashed'
-        if 'nab_score' in col: ls = 'dashdot'
-        if 'nab_prob' in col: ls = 'dotted'
-        graphs_list.append(plt.plot(weights_df.index, weights_df[col], label=col, linestyle=ls))
-    plt.xscale("log")
-    plt.xlabel("$\lambda$")
-    plt.ylabel("Regression coefficients")
-    plt.title("LASSO Plot: Regression")
-    plt.legend(loc="lower center")
-    # plt.legend(bbox_to_anchor=(1, 0), ncol=3)
-    plt.xticks(ticks=ticks, labels=ticks, rotation='vertical')
-    plt.show()
+    spagh.large_lasso_clean(weights_df, information_criterion_frame, ticks)
 
     return weights_df, information_criterion_frame
 

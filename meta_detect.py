@@ -14,8 +14,12 @@ import os
 import meta_detect_settings as settings
 import iou_regression as reg
 import iou_thresh_classification as thresh_class
+from plotting.scatter import scatter
 import pandas as pd
 import numpy as np
+import matplotlib as mpl
+
+mpl.rcParams['text.usetex'] = settings.USE_LATEX
 
 def parse_args():
     parser = argparse.ArgumentParser()
@@ -56,14 +60,17 @@ class MetaDetect(object):
         iou = self.base_frame["true_iou"].to_numpy(copy=True)
 
         if settings.RUN_REGRESSION:
-            r_squared_metrics = reg.regression(metrics, iou, method="gradient boost")
+            predictions, r_squared_metrics = reg.r2_regression(metrics, iou, method="gradient boost")
             print(r_squared_metrics)
+            scatter_x_label = "$\\textnormal{True } IoU$" if settings.USE_LATEX else "True $IoU$"
+            scatter_y_label = "$\\textnormal{Predicted } IoU$" if settings.USE_LATEX else "True $IoU$"
+            corr = scatter(predictions[0, :], predictions[1, :], xlabel=scatter_x_label, ylabel=scatter_y_label)
 
         if settings.RUN_REG_LASSO:
             weight_frame, information_criteria = reg.lasso_plot(metrics, iou, self.uncertainty_names)
 
         if settings.RUN_CLASSIFICATION:
-            frame_list = thresh_class.plot_classification(metrics, iou, thresholds=[0.3, 0.5, 0.7, 0.9])
+            frame_list = thresh_class.plot_classification(metrics, iou, thresholds=[0.3, 0.5, 0.7, 0.9], method="gradient boost")
 
         if settings.RUN_CLASS_LASSO:
             weight_frame, information_criteria = thresh_class.lasso_plot(metrics, iou, self.uncertainty_names, iou_threshold=0.3)
