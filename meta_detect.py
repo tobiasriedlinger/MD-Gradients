@@ -40,7 +40,13 @@ class MetaDetect(object):
 
         self.uncertainty_frame = pd.concat(uncertainty_metrics, axis=1)
         self.uncertainty_names = self.uncertainty_frame.columns
+        assert os.path.isdir(settings.METRICS_PATH)
+
         self.standardize_data()
+        #TODO: choice of metrics
+        self.metrics = self.uncertainty_frame.to_numpy(copy=True)
+        self.iou = self.base_frame["true_iou"].to_numpy(copy=True)
+
 
     def standardize_data(self):
         """
@@ -50,33 +56,27 @@ class MetaDetect(object):
             dat = np.copy(np.array(self.uncertainty_frame[col]))
             self.uncertainty_frame[col] = (self.uncertainty_frame[col] - np.mean(dat)) / np.std(dat)
 
-    def run_evaluation(self):
-        """
+    #TODO: purge run-settings
+    def run_regression(self):
+        predictions, r_squared_metrics = reg.r2_regression(self.metrics, self.iou, method="gradient boost")
+        print(r_squared_metrics)
+        scatter_x_label = "$\\textnormal{True } IoU$" if settings.USE_LATEX else "True $IoU$"
+        scatter_y_label = "$\\textnormal{Predicted } IoU$" if settings.USE_LATEX else "True $IoU$"
+        corr = scatter(predictions[0, :], predictions[1, :], xlabel=scatter_x_label, ylabel=scatter_y_label)
 
-        :return:
-        """
-        assert os.path.isdir(settings.METRICS_PATH)
-        metrics = self.uncertainty_frame.to_numpy(copy=True)
-        iou = self.base_frame["true_iou"].to_numpy(copy=True)
+    def run_regression_lasso(self):
+        weight_frame, information_criteria = reg.lasso_plot(self.metrics, self.iou, self.uncertainty_names)
 
-        if settings.RUN_REGRESSION:
-            predictions, r_squared_metrics = reg.r2_regression(metrics, iou, method="gradient boost")
-            print(r_squared_metrics)
-            scatter_x_label = "$\\textnormal{True } IoU$" if settings.USE_LATEX else "True $IoU$"
-            scatter_y_label = "$\\textnormal{Predicted } IoU$" if settings.USE_LATEX else "True $IoU$"
-            corr = scatter(predictions[0, :], predictions[1, :], xlabel=scatter_x_label, ylabel=scatter_y_label)
+    def run_thresh_classification(self):
+        frame_list = thresh_class.plot_classification(self.metrics, self.iou, thresholds=[0.3, 0.5, 0.7, 0.9],
+                                                      method="gradient boost")
 
-        if settings.RUN_REG_LASSO:
-            weight_frame, information_criteria = reg.lasso_plot(metrics, iou, self.uncertainty_names)
-
-        if settings.RUN_CLASSIFICATION:
-            frame_list = thresh_class.plot_classification(metrics, iou, thresholds=[0.3, 0.5, 0.7, 0.9], method="gradient boost")
-
-        if settings.RUN_CLASS_LASSO:
-            weight_frame, information_criteria = thresh_class.lasso_plot(metrics, iou, self.uncertainty_names, iou_threshold=0.3)
-        print("Reached End of Script!")
+    def run_thresh_classification_lasso(self):
+        weight_frame, information_criteria = thresh_class.lasso_plot(self.metrics, self.iou, self.uncertainty_names,
+                                                                     iou_threshold=0.3)
 
 
 if __name__ == "__main__":
     options = parse_args()
-    MetaDetect().run_evaluation()
+    md = MetaDetect()
+    print("Reached End of Script!")

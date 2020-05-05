@@ -20,10 +20,5 @@ INCLUDE_GRADIENT_METRICS = True
 GRADIENT_FRAME_FILE= "50images_last_layers.csv"
 GRADIENT_FRAME_PATH= "{}/{}/gradient_based/{}".format(METRICS_PATH, "COCO", GRADIENT_FRAME_FILE)
 
-RUN_REGRESSION     = False
-RUN_REG_LASSO      = False
-RUN_CLASSIFICATION = True
-RUN_CLASS_LASSO    = False
-
 ### PLOTTING:
 USE_LATEX          = False
