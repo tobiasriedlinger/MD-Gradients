@@ -22,3 +22,5 @@ GRADIENT_FRAME_PATH= "{}/{}/gradient_based/{}".format(METRICS_PATH, "COCO", GRAD
 
 ### PLOTTING:
 USE_LATEX          = False
+
+#TODO: remove settings file.

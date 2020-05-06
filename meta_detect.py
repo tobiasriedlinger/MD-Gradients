@@ -10,8 +10,8 @@
 #
 
 import argparse
+import json
 import os
-import meta_detect_settings as settings
 import iou_regression as reg
 import iou_thresh_classification as thresh_class
 from plotting.scatter import scatter
@@ -19,28 +19,29 @@ import pandas as pd
 import numpy as np
 import matplotlib as mpl
 
-mpl.rcParams['text.usetex'] = settings.USE_LATEX
-
 def parse_args():
     parser = argparse.ArgumentParser()
 
     return 1
 
 class MetaDetect(object):
-    def __init__(self):
+    def __init__(self, json_path):
+        with open(json_path, 'r') as file:
+            self.state = json.load(file)
         print("Reading bounding box information...")
-        self.base_frame = pd.read_csv(settings.BASE_FRAME_PATH)
+        self.base_frame = pd.read_csv(self.state['base frame path'])
+        #self.base_frame = pd.read_csv(settings.BASE_FRAME_PATH)
         uncertainty_metrics = [self.base_frame[["s"]]]
         print("\t> Done.")
-        if settings.INCLUDE_GRADIENT_METRICS:
+        if self.state['include grads']:
             print("Reading gradient uncertainty metrics...")
-            self.gradient_frame = pd.read_csv(settings.GRADIENT_FRAME_PATH)
+            #self.gradient_frame = pd.read_csv(settings.GRADIENT_FRAME_PATH)
+            self.gradient_frame = pd.read_csv(self.state['grad frame path'])
             uncertainty_metrics.append(self.gradient_frame.drop(["box_id", "Unnamed: 0"], axis=1))
             print("\t> Done.")
 
         self.uncertainty_frame = pd.concat(uncertainty_metrics, axis=1)
         self.uncertainty_names = self.uncertainty_frame.columns
-        assert os.path.isdir(settings.METRICS_PATH)
 
         self.standardize_data()
         #TODO: choice of metrics
@@ -56,13 +57,14 @@ class MetaDetect(object):
             dat = np.copy(np.array(self.uncertainty_frame[col]))
             self.uncertainty_frame[col] = (self.uncertainty_frame[col] - np.mean(dat)) / np.std(dat)
 
-    #TODO: purge run-settings
     def run_regression(self):
-        predictions, r_squared_metrics = reg.r2_regression(self.metrics, self.iou, method="gradient boost")
+        sample_predictions, r_squared_metrics = reg.r2_regression(self.metrics, self.iou, method="gradient boost")
         print(r_squared_metrics)
-        scatter_x_label = "$\\textnormal{True } IoU$" if settings.USE_LATEX else "True $IoU$"
-        scatter_y_label = "$\\textnormal{Predicted } IoU$" if settings.USE_LATEX else "True $IoU$"
-        corr = scatter(predictions[0, :], predictions[1, :], xlabel=scatter_x_label, ylabel=scatter_y_label)
+        scatter_x_label = "$\\textnormal{True } IoU$" if self.state['use latex'] else "True $IoU$"
+        scatter_y_label = "$\\textnormal{Predicted } IoU$" if self.state['use latex'] else "True $IoU$"
+        corr = scatter(sample_predictions[0, :], sample_predictions[1, :],plot=self.state['create plots'], xlabel=scatter_x_label, ylabel=scatter_y_label)
+
+        return sample_predictions, r_squared_metrics, corr
 
     def run_regression_lasso(self):
         weight_frame, information_criteria = reg.lasso_plot(self.metrics, self.iou, self.uncertainty_names)
@@ -78,5 +80,6 @@ class MetaDetect(object):
 
 if __name__ == "__main__":
     options = parse_args()
-    md = MetaDetect()
+    md = MetaDetect("./attribute_dicts/test_state.json")
+    md.run_regression()
     print("Reached End of Script!")
