@@ -39,7 +39,7 @@ state_dict = {     'metrics path'   : METRICS_PATH,
                    'use latex'      : USE_LATEX }
 
 json_path = "./attribute_dicts/{}.json".format(STATE_DICT_NAME)
-print("Saving current attributes specified in save_state_dict.py to ...".format(json_path))
+print("Saving current attributes specified in save_state_dict.py to {} ...".format(json_path))
 
 with open(json_path, 'w') as file:
     json.dump(state_dict, file)
